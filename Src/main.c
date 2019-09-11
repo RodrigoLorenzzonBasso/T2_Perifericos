@@ -43,6 +43,7 @@
 #include "dma2d.h"
 #include "i2c.h"
 #include "ltdc.h"
+#include "rtc.h"
 #include "spi.h"
 #include "usart.h"
 #include "gpio.h"
@@ -97,6 +98,9 @@ int main(void)
   /* USER CODE BEGIN 1 */
 	
 	TS_StateTypeDef TsState;
+	
+	RTC_TimeTypeDef sTime;
+	RTC_DateTypeDef sDate;
 
   /* USER CODE END 1 */
 
@@ -124,6 +128,7 @@ int main(void)
   MX_SPI5_Init();
   MX_FMC_Init();
   MX_USART1_UART_Init();
+  MX_RTC_Init();
   /* USER CODE BEGIN 2 */
 	
 	BSP_LCD_Init();
@@ -135,6 +140,13 @@ int main(void)
 	BSP_LCD_SetTextColor(LCD_COLOR_RED);
 	BSP_LCD_DisplayStringAtLine(1,(uint8_t*)"TESTE LINHA 1");
 	BSP_TS_Init(240, 320);
+	
+	
+	sTime.Hours = 18;
+	sTime.Minutes = 30;
+	sTime.Seconds = 0;
+	HAL_RTC_SetDate(&hrtc, &sDate, FORMAT_BIN);
+  HAL_RTC_SetTime(&hrtc, &sTime, FORMAT_BIN);
 
 
   /* USER CODE END 2 */
@@ -149,11 +161,20 @@ int main(void)
 		
 		
 		unsigned char tt[30];
-		HAL_UART_Receive(&huart1,tt,30,100);
+		HAL_UART_Receive(&huart1,tt,30,1000);
 		
 		BSP_LCD_DisplayStringAtLine(4,tt);
 		
-		HAL_Delay(50);
+		
+		HAL_RTC_GetTime(&hrtc, &sTime, FORMAT_BIN);
+		HAL_RTC_GetDate(&hrtc, &sDate, FORMAT_BIN);
+		
+		unsigned char print_vector[30];
+		
+		sprintf((char*)print_vector,"%02d:%02d:%02d",sTime.Hours,sTime.Minutes,sTime.Seconds);
+    BSP_LCD_DisplayStringAtLine(8,print_vector);
+		
+		HAL_Delay(100);
 		
 		
 		
@@ -191,8 +212,9 @@ void SystemClock_Config(void)
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
   /**Initializes the CPU, AHB and APB busses clocks 
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 4;
@@ -216,10 +238,11 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_LTDC;
+  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_LTDC|RCC_PERIPHCLK_RTC;
   PeriphClkInitStruct.PLLSAI.PLLSAIN = 216;
   PeriphClkInitStruct.PLLSAI.PLLSAIR = 2;
   PeriphClkInitStruct.PLLSAIDivR = RCC_PLLSAIDIVR_2;
+  PeriphClkInitStruct.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
   {
     Error_Handler();
