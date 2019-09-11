@@ -177,30 +177,33 @@ int main(void)
 		sprintf((char*)print_vector,"%02d:%02d:%02d",sTime.Hours,sTime.Minutes,sTime.Seconds);
     BSP_LCD_DisplayStringAtLine(8,print_vector);
 		
-		int X = 0;
+		int Pot = 0;
+		int Current = 0;
 		
 		HAL_ADC_Start(&hadc1);
 		HAL_ADC_PollForConversion(&hadc1,100);
-		X = HAL_ADC_GetValue(&hadc1); //LEITURA DO CANAL 5
+		Pot = HAL_ADC_GetValue(&hadc1); //LEITURA DO CANAL 5
+		HAL_ADC_PollForConversion(&hadc1,100);
+		Current = HAL_ADC_GetValue(&hadc1); //LEITURA DO CANAL 13 (na ordem RANK) //Pino PC3
 		HAL_ADC_Stop(&hadc1);
 		
-		sprintf((char*)print_vector,"%04d",X);
+		sprintf((char*)print_vector,"%04d",Pot);
 		BSP_LCD_DisplayStringAtLine(6,print_vector);
 		
-		if(X > 2000 & X < 2095)
+		if(Pot > 2000 & Pot < 2095)
 		{
 			BSP_LCD_DisplayStringAtLine(2,(uint8_t*)"motor disligado pora");
 		}
-		else if(X >= 2095)
+		else if(Pot >= 2095)
 		{
-			sprintf((char*)print_vector,"Motor Direita : %04d",((X-2095)*100)/2000);
+			sprintf((char*)print_vector,"Motor Direita : %04d",((Pot-2095)*100)/2000);
 			BSP_LCD_SetFont(&Font12);
 			BSP_LCD_DisplayStringAtLine(2,print_vector);
 			BSP_LCD_SetFont(&Font16);
 		}
-		else if(X <= 2000)
+		else if(Pot <= 2000)
 		{
-			sprintf((char*)print_vector,"Motor Esquerda : %04d",((2000-X)*100)/2000);
+			sprintf((char*)print_vector,"Motor Esquerda : %04d",((2000-Pot)*100)/2000);
 			BSP_LCD_SetFont(&Font12);
 			BSP_LCD_DisplayStringAtLine(2,print_vector);
 			BSP_LCD_SetFont(&Font16);
