@@ -40,6 +40,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "adc.h"
 #include "dma2d.h"
 #include "i2c.h"
 #include "ltdc.h"
@@ -129,6 +130,7 @@ int main(void)
   MX_FMC_Init();
   MX_USART1_UART_Init();
   MX_RTC_Init();
+  MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
 	
 	BSP_LCD_Init();
@@ -138,7 +140,8 @@ int main(void)
 	BSP_LCD_DisplayOn();
 	BSP_LCD_Clear(LCD_COLOR_WHITE);
 	BSP_LCD_SetTextColor(LCD_COLOR_RED);
-	BSP_LCD_DisplayStringAtLine(1,(uint8_t*)"TESTE LINHA 1");
+	BSP_LCD_SetFont(&Font16);
+	//BSP_LCD_DisplayStringAtLine(1,(uint8_t*)"TESTE LINHA 1");
 	BSP_TS_Init(240, 320);
 	
 	
@@ -173,6 +176,35 @@ int main(void)
 		
 		sprintf((char*)print_vector,"%02d:%02d:%02d",sTime.Hours,sTime.Minutes,sTime.Seconds);
     BSP_LCD_DisplayStringAtLine(8,print_vector);
+		
+		int X = 0;
+		
+		HAL_ADC_Start(&hadc1);
+		HAL_ADC_PollForConversion(&hadc1,100);
+		X = HAL_ADC_GetValue(&hadc1); //LEITURA DO CANAL 5
+		HAL_ADC_Stop(&hadc1);
+		
+		sprintf((char*)print_vector,"%04d",X);
+		BSP_LCD_DisplayStringAtLine(6,print_vector);
+		
+		if(X > 2000 & X < 2095)
+		{
+			BSP_LCD_DisplayStringAtLine(2,(uint8_t*)"motor disligado pora");
+		}
+		else if(X >= 2095)
+		{
+			sprintf((char*)print_vector,"Motor Direita : %04d",((X-2095)*100)/2000);
+			BSP_LCD_SetFont(&Font12);
+			BSP_LCD_DisplayStringAtLine(2,print_vector);
+			BSP_LCD_SetFont(&Font16);
+		}
+		else if(X <= 2000)
+		{
+			sprintf((char*)print_vector,"Motor Esquerda : %04d",((2000-X)*100)/2000);
+			BSP_LCD_SetFont(&Font12);
+			BSP_LCD_DisplayStringAtLine(2,print_vector);
+			BSP_LCD_SetFont(&Font16);
+		}
 		
 		HAL_Delay(100);
 		
