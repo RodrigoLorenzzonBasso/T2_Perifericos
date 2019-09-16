@@ -88,6 +88,80 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+uint8_t dadoRX[10];
+
+uint8_t hora;
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+  hora = (dadoRX[0] - 0x30)*10 + (dadoRX[1] - 0x30);
+	
+	HAL_UART_Receive_IT(&huart1,dadoRX,2);
+}
+
+//endereco do sensor de pressao 0xBA e 0xBC
+
+// endereco do sensor ::: 0xBE (Write) 0xBF (Read)
+float le_umidade(void)
+{
+	uint8_t dado[2];
+	dado[0] = 0x82;
+	dado[1] = 0;
+	
+	uint16_t H0_rH_x2, H1_rH_x2;
+	
+	int16_t H0_T0_OUT, H1_T0_OUT;
+	
+	int16_t H_OUT;
+	
+	//escrever na memoria do sensor pra dar WAKE UP
+	HAL_I2C_Mem_Write(&hi2c3,0xBE,0x20,I2C_MEMADD_SIZE_8BIT,&dado[0],1,200);
+	
+	//agora seguir roteiro
+	
+	//1 leitura dos registradores das posicoes 0x30 e 0x31
+	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x30,I2C_MEMADD_SIZE_8BIT,&dado[0],1,200);
+	
+	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x31,I2C_MEMADD_SIZE_8BIT,&dado[1],1,200);
+	
+	H0_rH_x2 = dado[0]/2;
+	H1_rH_x2 = dado[1]/2;
+	
+	float Humidity = 0;
+	
+	//3 leitura dos 0x36, 0x37
+	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x36,I2C_MEMADD_SIZE_8BIT,&dado[0],1,50);
+	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x37,I2C_MEMADD_SIZE_8BIT,&dado[1],1,50);
+	
+	H0_T0_OUT = (dado[1] << 8) + dado[0];
+	
+	//4 leitura 0x3a, 0x3b
+	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x3a,I2C_MEMADD_SIZE_8BIT,&dado[0],1,50);
+	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x3b,I2C_MEMADD_SIZE_8BIT,&dado[1],1,50);
+	
+	H1_T0_OUT = (dado[1] << 8) + dado[0];
+	
+	// 5 leitura do 0x28 e 0x29
+	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x28,I2C_MEMADD_SIZE_8BIT,&dado[0],1,50);
+	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x29,I2C_MEMADD_SIZE_8BIT,&dado[1],1,50);
+	
+	H_OUT = (dado[1] << 8) + dado[0];
+	
+	// 6 calcular
+	
+	Humidity = (((H1_rH_x2 - H0_rH_x2) * (H_OUT - H0_T0_OUT))/(H1_T0_OUT - H0_T0_OUT))+H0_rH_x2;
+		
+	return Humidity;
+}
+
+//
+//	9 SDA - PC9
+//	10 SCL - PA8
+//	2 -> 3V
+//	6 -> GND
+//
+//
+
 /* USER CODE END 0 */
 
 /**
@@ -102,6 +176,8 @@ int main(void)
 	
 	RTC_TimeTypeDef sTime;
 	RTC_DateTypeDef sDate;
+	
+	float umidade = 0;
 
   /* USER CODE END 1 */
 
@@ -152,6 +228,9 @@ int main(void)
   HAL_RTC_SetTime(&hrtc, &sTime, FORMAT_BIN);
 
 
+	// armando primeira interrupcao
+	HAL_UART_Receive_IT(&huart1,dadoRX,2);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -162,11 +241,18 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 		
-		
+
 		unsigned char tt[30];
-		HAL_UART_Receive(&huart1,tt,30,1000);
 		
-		BSP_LCD_DisplayStringAtLine(4,tt);
+		umidade = le_umidade();
+		
+		sprintf((char*)tt,"%f",umidade);
+		
+		//BSP_LCD_Clear(LCD_COLOR_WHITE);
+		BSP_LCD_DisplayStringAtLine(12,tt);
+		
+		//HAL_UART_Receive(&huart1,tt,30,1000);
+		//BSP_LCD_DisplayStringAtLine(4,tt);
 		
 		
 		HAL_RTC_GetTime(&hrtc, &sTime, FORMAT_BIN);
@@ -192,7 +278,9 @@ int main(void)
 		
 		if(Pot > 2000 & Pot < 2095)
 		{
+			BSP_LCD_SetFont(&Font12);
 			BSP_LCD_DisplayStringAtLine(2,(uint8_t*)"motor disligado pora");
+			BSP_LCD_SetFont(&Font16);
 		}
 		else if(Pot >= 2095)
 		{
@@ -209,7 +297,7 @@ int main(void)
 			BSP_LCD_SetFont(&Font16);
 		}
 		
-		HAL_Delay(100);
+		HAL_Delay(200);
 		
 		
 		
