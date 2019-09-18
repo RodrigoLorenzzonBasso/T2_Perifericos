@@ -39,6 +39,8 @@ displaylcd\main.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_pwr_ex.h
 displaylcd\main.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_rtc.h
 displaylcd\main.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_rtc_ex.h
 displaylcd\main.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_spi.h
+displaylcd\main.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h
+displaylcd\main.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h
 displaylcd\main.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h
 displaylcd\main.o: ../Inc/adc.h
 displaylcd\main.o: ../Inc/dma2d.h
@@ -46,6 +48,7 @@ displaylcd\main.o: ../Inc/i2c.h
 displaylcd\main.o: ../Inc/ltdc.h
 displaylcd\main.o: ../Inc/rtc.h
 displaylcd\main.o: ../Inc/spi.h
+displaylcd\main.o: ../Inc/tim.h
 displaylcd\main.o: ../Inc/usart.h
 displaylcd\main.o: ../Inc/gpio.h
 displaylcd\main.o: ../Inc/fmc.h

@@ -16,6 +16,7 @@
 "displaylcd\ltdc.o"
 "displaylcd\rtc.o"
 "displaylcd\spi.o"
+"displaylcd\tim.o"
 "displaylcd\usart.o"
 "displaylcd\stm32f4xx_it.o"
 "displaylcd\stm32f4xx_hal_msp.o"

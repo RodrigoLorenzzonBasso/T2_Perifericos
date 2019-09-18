@@ -9,6 +9,7 @@
 #include "ltdc.h"
 #include "rtc.h"
 #include "spi.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 #include "fmc.h"
@@ -53,7 +54,6 @@ void SystemClock_Config(void);
 
 struct Control{
 
-  uint8_t hora, minuto, segundo;
   RTC_TimeTypeDef sTime;
 	RTC_DateTypeDef sDate;
 
@@ -88,11 +88,14 @@ void inicializa_display(void);
 //
 
 /* USER CODE END 0 */
+
+/**
+  * @brief  The application entry point.
+  * @retval int
+  */
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-	
-	TS_StateTypeDef TsState;
 	
 	c.umidade = 0;
   c.corrente = 0;
@@ -103,13 +106,9 @@ int main(void)
   inicializa_vetor_uint8(c.dadoRX, 10);
   inicializa_vetor_uint8(c.vetor_print, 30);
 
-  c.hora = 18;
-  c.minuto = 30;
-  c.segundo = 0;
-
-  c.sTime.Hours = c.hora;
-  c.sTime.Minutes = c.minuto;
-  c.sTime.Seconds = c.segundo;
+  c.sTime.Hours = 18;
+  c.sTime.Minutes = 30;
+  c.sTime.Seconds = 0;
 
   /* USER CODE END 1 */
 
@@ -139,6 +138,8 @@ int main(void)
   MX_USART1_UART_Init();
   MX_RTC_Init();
   MX_ADC1_Init();
+  MX_TIM2_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 	
   inicializa_display();
@@ -148,7 +149,12 @@ int main(void)
 
 
 	// armando primeira interrupcao
-	HAL_UART_Receive_IT(&huart1,c.dadoRX,2);
+	HAL_UART_Receive_IT(&huart1,c.dadoRX,8);
+	
+	// inicializando PWM
+	
+	HAL_TIM_PWM_Start(&htim2,TIM_CHANNEL_2);
+	HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_1);
 
   /* USER CODE END 2 */
 
@@ -160,8 +166,9 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 		
-		renderizacao_RTC();
+		renderiza_RTC();
 		leitura_AD(200);
+		renderiza_sensores();
     aciona_PWM();
 
 		HAL_Delay(100);
@@ -205,8 +212,8 @@ void SystemClock_Config(void)
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV4;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV8;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV8;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
   {
@@ -227,14 +234,9 @@ void SystemClock_Config(void)
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-  c.hora = (c.dadoRX[0] - 0x30)*10 + (c.dadoRX[1] - 0x30);
-	
-	HAL_UART_Receive_IT(&huart1,c.dadoRX,2);
+	configura_hora();
+	HAL_UART_Receive_IT(&huart1,c.dadoRX,8);
 }
-
-//endereco do sensor de pressao 0xBA e 0xBC
-
-// endereco do sensor ::: 0xBE (Write) 0xBF (Read)
 float le_umidade(void)
 {
 	uint8_t dado[2];
@@ -248,19 +250,18 @@ float le_umidade(void)
 	int16_t H_OUT;
 	
 	//escrever na memoria do sensor pra dar WAKE UP
-	HAL_I2C_Mem_Write(&hi2c3,0xBE,0x20,I2C_MEMADD_SIZE_8BIT,&dado[0],1,200);
+	HAL_I2C_Mem_Write(&hi2c3,0xBE,0x20,I2C_MEMADD_SIZE_8BIT,&dado[0],1,50);
 	
 	//agora seguir roteiro
 	
 	//1 leitura dos registradores das posicoes 0x30 e 0x31
-	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x30,I2C_MEMADD_SIZE_8BIT,&dado[0],1,200);
-	
-	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x31,I2C_MEMADD_SIZE_8BIT,&dado[1],1,200);
+	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x30,I2C_MEMADD_SIZE_8BIT,&dado[0],1,50);
+	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x31,I2C_MEMADD_SIZE_8BIT,&dado[1],1,50);
 	
 	H0_rH_x2 = dado[0]/2;
 	H1_rH_x2 = dado[1]/2;
 	
-	float Humidity = 0;
+	float h = 0;
 	
 	//3 leitura dos 0x36, 0x37
 	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x36,I2C_MEMADD_SIZE_8BIT,&dado[0],1,50);
@@ -282,14 +283,64 @@ float le_umidade(void)
 	
 	// 6 calcular
 	
-	Humidity = (((H1_rH_x2 - H0_rH_x2) * (H_OUT - H0_T0_OUT))/(H1_T0_OUT - H0_T0_OUT))+H0_rH_x2;
+	h = (((H1_rH_x2 - H0_rH_x2) * (H_OUT - H0_T0_OUT))/(H1_T0_OUT - H0_T0_OUT))+H0_rH_x2;
 		
-	return Humidity;
+	return h;
 }
 
 float le_temperatura(void)
 {
+	uint8_t dado[2];
+	dado[0] = 0x82;
+	dado[1] = 0;
+	
+	uint16_t T0_degC_x8 = 0, T1_degC_x8 = 0;
+	uint8_t T1_T0_msb = 0;
+	
+	int16_t T0_OUT = 0, T1_OUT = 0;
+	
+	uint16_t T_OUT = 0;
+	
+	float t = 0;
+	
+	//escrever na memoria do sensor pra dar WAKE UP
+	HAL_I2C_Mem_Write(&hi2c3,0xBE,0x20,I2C_MEMADD_SIZE_8BIT,&dado[0],1,50);
+	
+	//1 leitura dos registradores das posicoes 0x32 e 0x33
+	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x32,I2C_MEMADD_SIZE_8BIT,&dado[0],1,50);
+	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x33,I2C_MEMADD_SIZE_8BIT,&dado[1],1,50);
+	
+	T0_degC_x8 = dado[0]/8;
+	T1_degC_x8 = dado[1]/8;
+	
+	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x35,I2C_MEMADD_SIZE_8BIT,&dado[0],1,50);
+	
+	T1_T0_msb = dado[0];
+	
+	uint8_t T0_2bits = T1_T0_msb & 0x3;
+	uint8_t T1_2bits = T1_T0_msb & 0xC;
+	
+	T0_degC_x8 += (T0_2bits << 8);
+	T1_degC_x8 += (T1_2bits << 6);
+	
+	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x3C,I2C_MEMADD_SIZE_8BIT,&dado[0],1,50);
+	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x3D,I2C_MEMADD_SIZE_8BIT,&dado[1],1,50);
+	
+	T0_OUT = dado[0] + (dado[1] << 8);
+	
+	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x3E,I2C_MEMADD_SIZE_8BIT,&dado[0],1,50);
+	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x3F,I2C_MEMADD_SIZE_8BIT,&dado[1],1,50);
+	
+	T1_OUT = dado[0] + (dado[1] << 8);
 
+	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x2A,I2C_MEMADD_SIZE_8BIT,&dado[0],1,50);
+	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x2B,I2C_MEMADD_SIZE_8BIT,&dado[1],1,50);
+	
+	T_OUT = dado[0] + (dado[1] << 8);
+	
+	t = (((T1_degC_x8 - T0_degC_x8)*(T_OUT - T0_OUT))/(T1_OUT - T0_OUT)) + T0_degC_x8;
+	
+	return t;
 }
 
 void inicializa_vetor_uint8(uint8_t vetor[], int tam)
@@ -314,22 +365,31 @@ void aciona_PWM(void)
 {
   if(c.potenciometro > 2000 & c.potenciometro < 2095)
   {
-    BSP_LCD_SetFont(&Font12);
+    BSP_LCD_SetFont(&Font16);
     BSP_LCD_DisplayStringAtLine(2,(uint8_t*)"motor disligado pora");
+		
+		TIM2->CCR2 = 0;
+		TIM3->CCR1 = 0;
   }
   else if(c.potenciometro >= 2095)
   {
     int pwm_percent = ((c.potenciometro-2095)*100)/2000;
     sprintf((char*)c.vetor_print,"Motor Direita : %04d",pwm_percent);
-    BSP_LCD_SetFont(&Font12);
+    BSP_LCD_SetFont(&Font16);
     BSP_LCD_DisplayStringAtLine(3,c.vetor_print);
+		
+		TIM2->CCR2 = pwm_percent;
+		TIM3->CCR1 = 0;
   }
   else if(c.potenciometro <= 2000)
   {
     int pwm_percent = ((2000-c.potenciometro)*100)/2000;
     sprintf((char*)c.vetor_print,"Motor Esquerda : %04d", pwm_percent);
-    BSP_LCD_SetFont(&Font12);
+    BSP_LCD_SetFont(&Font16);
     BSP_LCD_DisplayStringAtLine(4,c.vetor_print);
+		
+		TIM2->CCR2 = 0;
+		TIM3->CCR1 = pwm_percent;
   }
 }
 
@@ -338,7 +398,7 @@ void renderiza_RTC(void)
   HAL_RTC_GetTime(&hrtc, &c.sTime, FORMAT_BIN);
   HAL_RTC_GetDate(&hrtc, &c.sDate, FORMAT_BIN);
   
-  BSP_LCD_SetFont(&Font12);
+  BSP_LCD_SetFont(&Font16);
   sprintf((char*)c.vetor_print,"%02d:%02d:%02d",c.sTime.Hours,c.sTime.Minutes,c.sTime.Seconds);
   BSP_LCD_DisplayStringAtLine(1,c.vetor_print);
 }
@@ -346,20 +406,25 @@ void renderiza_RTC(void)
 void renderiza_sensores(void)
 {
   c.umidade = le_umidade();
-  //c.temperatura = le_temperatura();
+  c.temperatura = le_temperatura();
 
   BSP_LCD_SetFont(&Font16);
   sprintf((char*)c.vetor_print,"%2.1f",c.umidade);
   BSP_LCD_DisplayStringAtLine(5,c.vetor_print);
 
-  /*BSP_LCD_SetFont(&Font16);
+  BSP_LCD_SetFont(&Font16);
   sprintf((char*)c.vetor_print,"%2.1f",c.temperatura);
-  BSP_LCD_DisplayStringAtLine(6,c.vetor_print);*/
+  BSP_LCD_DisplayStringAtLine(6,c.vetor_print);
 }
 
 void configura_hora(void)
-{
-
+{	
+	c.sTime.Hours = (c.dadoRX[0] - 0x30)*10 + (c.dadoRX[1] - 0x30);
+	c.sTime.Minutes = (c.dadoRX[3] - 0x30)*10 + (c.dadoRX[4] - 0x30);
+	c.sTime.Seconds = (c.dadoRX[6] - 0x30)*10 + (c.dadoRX[7] - 0x30);
+	
+	HAL_RTC_SetDate(&hrtc, &c.sDate, FORMAT_BIN);
+  HAL_RTC_SetTime(&hrtc, &c.sTime, FORMAT_BIN);
 }
 
 void inicializa_display(void)
