@@ -291,56 +291,41 @@ float le_umidade(void)
 float le_temperatura(void)
 {
 	uint8_t dado[2];
+	uint16_t T0_degC = 0, T1_degC = 0;
+	int16_t  T1_out = 0, T0_out = 0,T_out= 0;
+	
 	dado[0] = 0x82;
-	dado[1] = 0;
-	
-	uint16_t T0_degC_x8 = 0, T1_degC_x8 = 0;
-	uint8_t T1_T0_msb = 0;
-	
-	int16_t T0_OUT = 0, T1_OUT = 0;
-	
-	uint16_t T_OUT = 0;
-	
-	float t = 0;
-	
-	//escrever na memoria do sensor pra dar WAKE UP
 	HAL_I2C_Mem_Write(&hi2c3,0xBE,0x20,I2C_MEMADD_SIZE_8BIT,&dado[0],1,50);
 	
-	//1 leitura dos registradores das posicoes 0x32 e 0x33
 	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x32,I2C_MEMADD_SIZE_8BIT,&dado[0],1,50);
 	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x33,I2C_MEMADD_SIZE_8BIT,&dado[1],1,50);
 	
-	T0_degC_x8 = dado[0]/8;
-	T1_degC_x8 = dado[1]/8;
+	T0_degC = dado[0]; 
+	T1_degC = dado[1];
 	
 	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x35,I2C_MEMADD_SIZE_8BIT,&dado[0],1,50);
 	
-	T1_T0_msb = dado[0];
-	
-	uint8_t T0_2bits = T1_T0_msb & 0x3;
-	uint8_t T1_2bits = T1_T0_msb & 0xC;
-	
-	T0_degC_x8 += (T0_2bits << 8);
-	T1_degC_x8 += (T1_2bits << 6);
+	T1_degC = ((dado[0] & 0xC) << 6) + T1_degC; 
+	T0_degC = ((dado[0]  & 3) << 8) + T0_degC;
+	T0_degC = T0_degC /8; 
+	T1_degC = T1_degC / 8;
 	
 	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x3C,I2C_MEMADD_SIZE_8BIT,&dado[0],1,50);
 	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x3D,I2C_MEMADD_SIZE_8BIT,&dado[1],1,50);
 	
-	T0_OUT = dado[0] + (dado[1] << 8);
+	T0_out = (dado[1] << 8) + dado[0];
 	
 	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x3E,I2C_MEMADD_SIZE_8BIT,&dado[0],1,50);
 	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x3F,I2C_MEMADD_SIZE_8BIT,&dado[1],1,50);
 	
-	T1_OUT = dado[0] + (dado[1] << 8);
-
+	T1_out = (dado[1] << 8) + dado[0];
+	
 	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x2A,I2C_MEMADD_SIZE_8BIT,&dado[0],1,50);
 	HAL_I2C_Mem_Read(&hi2c3,0xBF,0x2B,I2C_MEMADD_SIZE_8BIT,&dado[1],1,50);
 	
-	T_OUT = dado[0] + (dado[1] << 8);
+	T_out = (dado[1] << 8) + dado[0];
 	
-	t = (((T1_degC_x8 - T0_degC_x8)*(T_OUT - T0_OUT))/(T1_OUT - T0_OUT)) + T0_degC_x8;
-	
-	return t;
+	return (((T1_degC - T0_degC) * (T_out - T0_out))/(T1_out - T0_out) + T0_degC);
 }
 
 void inicializa_vetor_uint8(uint8_t vetor[], int tam)
@@ -409,11 +394,11 @@ void renderiza_sensores(void)
   c.temperatura = le_temperatura();
 
   BSP_LCD_SetFont(&Font16);
-  sprintf((char*)c.vetor_print,"%2.1f",c.umidade);
+  sprintf((char*)c.vetor_print,"%4.1f",c.umidade);
   BSP_LCD_DisplayStringAtLine(5,c.vetor_print);
 
   BSP_LCD_SetFont(&Font16);
-  sprintf((char*)c.vetor_print,"%2.1f",c.temperatura);
+  sprintf((char*)c.vetor_print,"%4.1f",c.temperatura);
   BSP_LCD_DisplayStringAtLine(6,c.vetor_print);
 }
 
