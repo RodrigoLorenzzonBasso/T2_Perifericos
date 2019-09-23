@@ -43,6 +43,8 @@ displaylcd\stm32f429i_discovery_lcd.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32
 displaylcd\stm32f429i_discovery_lcd.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h
 displaylcd\stm32f429i_discovery_lcd.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h
 displaylcd\stm32f429i_discovery_lcd.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h
+displaylcd\stm32f429i_discovery_lcd.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_hcd.h
+displaylcd\stm32f429i_discovery_lcd.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_usb.h
 displaylcd\stm32f429i_discovery_lcd.o: ..\Drivers\BSP\STM32F429I-Discovery\stm32f429i_discovery_sdram.h
 displaylcd\stm32f429i_discovery_lcd.o: ..\Drivers\BSP\STM32F429I-Discovery\../../../Utilities/Fonts/fonts.h
 displaylcd\stm32f429i_discovery_lcd.o: ..\Drivers\BSP\STM32F429I-Discovery\../Components/ili9341/ili9341.h

@@ -5,12 +5,14 @@
 #include "main.h"
 #include "adc.h"
 #include "dma2d.h"
+#include "fatfs.h"
 #include "i2c.h"
 #include "ltdc.h"
 #include "rtc.h"
 #include "spi.h"
 #include "tim.h"
 #include "usart.h"
+#include "usb_host.h"
 #include "gpio.h"
 #include "fmc.h"
 
@@ -45,6 +47,8 @@
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+void MX_USB_HOST_Process(void);
+
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -57,7 +61,7 @@ struct Control{
   RTC_TimeTypeDef sTime;
 	RTC_DateTypeDef sDate;
 
-  uint8_t dadoRX[10];
+  uint8_t dadoRX[30];
 
   float temperatura, umidade, pressao;
   int corrente, potenciometro;
@@ -65,6 +69,17 @@ struct Control{
   uint8_t vetor_print[30];
 
 }c;
+
+struct PenDriveControl{
+	FIL fp; //file handle
+	FATFS fatfs; //structure with file system information
+	char* text[100]; //text which will be written into file
+	char filename[100];
+	char buffer[100]; //buffer for data read from file
+	uint32_t ret; //return variable
+}p;
+
+extern ApplicationTypeDef Appli_state;
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart);
 float le_umidade(void);
@@ -75,6 +90,7 @@ void renderiza_RTC(void);
 void renderiza_sensores(void);
 void configura_hora(void);
 void inicializa_display(void);
+void pendrive(void);
 
 //endereco do sensor de pressao 0xBA e 0xBC
 // endereco do sensor ::: 0xBE (Write) 0xBF (Read)
@@ -103,12 +119,18 @@ int main(void)
   c.temperatura = 0;
   c.potenciometro = 0;
 
-  inicializa_vetor_uint8(c.dadoRX, 10);
+  inicializa_vetor_uint8(c.dadoRX, 30);
   inicializa_vetor_uint8(c.vetor_print, 30);
 
   c.sTime.Hours = 18;
   c.sTime.Minutes = 30;
   c.sTime.Seconds = 0;
+	
+	c.sDate.Year = 70;
+	c.sDate.Month = 01;
+	c.sDate.Date = 01;
+	
+	strcpy(p.filename,"log.csv");
 
   /* USER CODE END 1 */
 
@@ -140,19 +162,21 @@ int main(void)
   MX_ADC1_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
+  MX_USB_HOST_Init();
+  MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
 	
   inicializa_display();
 	
+	// seta primeira hora e data RTC
 	HAL_RTC_SetDate(&hrtc, &c.sDate, FORMAT_BIN);
   HAL_RTC_SetTime(&hrtc, &c.sTime, FORMAT_BIN);
 
 
 	// armando primeira interrupcao
-	HAL_UART_Receive_IT(&huart1,c.dadoRX,8);
+	HAL_UART_Receive_IT(&huart1,c.dadoRX,17);
 	
 	// inicializando PWM
-	
 	HAL_TIM_PWM_Start(&htim2,TIM_CHANNEL_2);
 	HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_1);
 
@@ -163,6 +187,7 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
+    MX_USB_HOST_Process();
 
     /* USER CODE BEGIN 3 */
 		
@@ -235,7 +260,7 @@ void SystemClock_Config(void)
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
 	configura_hora();
-	HAL_UART_Receive_IT(&huart1,c.dadoRX,8);
+	HAL_UART_Receive_IT(&huart1,c.dadoRX,17);
 }
 float le_umidade(void)
 {
@@ -408,6 +433,10 @@ void configura_hora(void)
 	c.sTime.Minutes = (c.dadoRX[3] - 0x30)*10 + (c.dadoRX[4] - 0x30);
 	c.sTime.Seconds = (c.dadoRX[6] - 0x30)*10 + (c.dadoRX[7] - 0x30);
 	
+	c.sDate.Year = (c.dadoRX[9] - 0x30)*10 + (c.dadoRX[10] - 0x30);
+	c.sDate.Month = (c.dadoRX[12] - 0x30)*10 + (c.dadoRX[13] - 0x30);
+	c.sDate.Date = (c.dadoRX[15] - 0x30)*10 + (c.dadoRX[16] - 0x30);
+	
 	HAL_RTC_SetDate(&hrtc, &c.sDate, FORMAT_BIN);
   HAL_RTC_SetTime(&hrtc, &c.sTime, FORMAT_BIN);
 }
@@ -425,6 +454,24 @@ void inicializa_display(void)
 	BSP_TS_Init(240, 320);
 }
 
+void pendrive(void)
+{
+	static int flag = 0;
+	HAL_GPIO_TogglePin(GPIOG,1<<14);
+	while(flag == 0) // abre o arquivo para escrita na primeira vez e deixa aberto
+	{
+		MX_USB_HOST_Process();
+		if(Appli_state==APPLICATION_READY)
+		{		
+			if(f_open(&p.fp,p.filename,FA_CREATE_ALWAYS | FA_WRITE)!=FR_OK)
+				while(1);
+			else
+				flag=1;
+		}
+	}
+	
+	
+}
 /* USER CODE END 4 */
 
 /**
