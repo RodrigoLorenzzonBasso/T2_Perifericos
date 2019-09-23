@@ -65,6 +65,8 @@ struct Control{
 
   float temperatura, umidade, pressao;
   int corrente, potenciometro;
+	
+	int indice;
 
   uint8_t vetor_print[30];
 
@@ -75,7 +77,7 @@ struct PenDriveControl{
 	FATFS fatfs; //structure with file system information
 	char* text[100]; //text which will be written into file
 	char filename[100];
-	char buffer[100]; //buffer for data read from file
+	char buffer[200]; //buffer for data read from file
 	uint32_t ret; //return variable
 }p;
 
@@ -83,6 +85,8 @@ extern ApplicationTypeDef Appli_state;
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart);
 float le_umidade(void);
+float le_temperatura(void);
+float le_pressao(void);
 void inicializa_vetor_uint8(uint8_t vetor[], int tam);
 void leitura_AD(int tempo);
 void aciona_PWM(void);
@@ -92,12 +96,12 @@ void configura_hora(void);
 void inicializa_display(void);
 void pendrive(void);
 
-//endereco do sensor de pressao 0xBA e 0xBC
+//endereco do sensor de pressao 0xBA e 0xBB
 // endereco do sensor ::: 0xBE (Write) 0xBF (Read)
 
 //
 //	9 SDA - PC9
-//	10 SCL - PA8
+//	10 SCL - PA8 de baixo
 //	2 -> 3V
 //	6 -> GND
 //
@@ -118,6 +122,7 @@ int main(void)
   c.pressao = 0;
   c.temperatura = 0;
   c.potenciometro = 0;
+	c.indice = 0;
 
   inicializa_vetor_uint8(c.dadoRX, 30);
   inicializa_vetor_uint8(c.vetor_print, 30);
@@ -179,6 +184,14 @@ int main(void)
 	// inicializando PWM
 	HAL_TIM_PWM_Start(&htim2,TIM_CHANNEL_2);
 	HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_1);
+	
+	if ( f_mount( &p.fatfs,"" ,0) != FR_OK )
+	{
+		BSP_LCD_SetFont(&Font16);
+		sprintf((char*)c.vetor_print,"coisa ruim111");
+		BSP_LCD_DisplayStringAtLine(9,c.vetor_print);
+		while(1);
+	}
 
   /* USER CODE END 2 */
 
@@ -196,7 +209,9 @@ int main(void)
 		renderiza_sensores();
     aciona_PWM();
 
-		HAL_Delay(100);
+		HAL_Delay(800);
+		MX_USB_HOST_Process();
+		pendrive();
 		
   }
   /* USER CODE END 3 */
@@ -352,7 +367,38 @@ float le_temperatura(void)
 	
 	return (((T1_degC - T0_degC) * (T_out - T0_out))/(T1_out - T0_out) + T0_degC);
 }
-
+float le_pressao(void)
+{
+	uint8_t dado[2];
+	
+	int pressao = 0;
+	float p = 0;
+	uint8_t buffer1 = 0;
+	uint8_t buffer2 = 0;
+	uint8_t buffer3 = 0;
+	
+	dado[0] = 0x3A;	
+	HAL_I2C_Mem_Write(&hi2c3,0xBA,0x10,I2C_MEMADD_SIZE_8BIT,&dado[0],1,50);
+	dado[0] = 0x10;
+	HAL_I2C_Mem_Write(&hi2c3,0xBA,0x11,I2C_MEMADD_SIZE_8BIT,&dado[0],1,50);
+	
+	HAL_I2C_Mem_Read(&hi2c3,0xBB,0x28,I2C_MEMADD_SIZE_8BIT,&dado[0],1,50);
+	buffer1 = dado[0];
+	
+	HAL_I2C_Mem_Read(&hi2c3,0xBB,0x29,I2C_MEMADD_SIZE_8BIT,&dado[0],1,50);
+	buffer2 = dado[0];
+	
+	HAL_I2C_Mem_Read(&hi2c3,0xBB,0x2A,I2C_MEMADD_SIZE_8BIT,&dado[0],1,50);
+	buffer3 = dado[0];
+	
+	pressao = buffer1 + (buffer2 << 8) + (buffer3 << 16);
+	
+	pressao = pressao/4096;
+	
+	p = pressao;
+	
+	return p;	
+}
 void inicializa_vetor_uint8(uint8_t vetor[], int tam)
 {
   for(int i = 0; i < tam; i++)
@@ -376,7 +422,7 @@ void aciona_PWM(void)
   if(c.potenciometro > 2000 & c.potenciometro < 2095)
   {
     BSP_LCD_SetFont(&Font16);
-    BSP_LCD_DisplayStringAtLine(2,(uint8_t*)"motor disligado pora");
+    BSP_LCD_DisplayStringAtLine(3,(uint8_t*)"motor disligado pora");
 		
 		TIM2->CCR2 = 0;
 		TIM3->CCR1 = 0;
@@ -386,7 +432,7 @@ void aciona_PWM(void)
     int pwm_percent = ((c.potenciometro-2095)*100)/2000;
     sprintf((char*)c.vetor_print,"Motor Direita : %04d",pwm_percent);
     BSP_LCD_SetFont(&Font16);
-    BSP_LCD_DisplayStringAtLine(3,c.vetor_print);
+    BSP_LCD_DisplayStringAtLine(4,c.vetor_print);
 		
 		TIM2->CCR2 = pwm_percent;
 		TIM3->CCR1 = 0;
@@ -396,7 +442,7 @@ void aciona_PWM(void)
     int pwm_percent = ((2000-c.potenciometro)*100)/2000;
     sprintf((char*)c.vetor_print,"Motor Esquerda : %04d", pwm_percent);
     BSP_LCD_SetFont(&Font16);
-    BSP_LCD_DisplayStringAtLine(4,c.vetor_print);
+    BSP_LCD_DisplayStringAtLine(5,c.vetor_print);
 		
 		TIM2->CCR2 = 0;
 		TIM3->CCR1 = pwm_percent;
@@ -411,20 +457,28 @@ void renderiza_RTC(void)
   BSP_LCD_SetFont(&Font16);
   sprintf((char*)c.vetor_print,"%02d:%02d:%02d",c.sTime.Hours,c.sTime.Minutes,c.sTime.Seconds);
   BSP_LCD_DisplayStringAtLine(1,c.vetor_print);
+	
+	sprintf((char*)c.vetor_print,"%02d:%02d:%02d",c.sDate.Date,c.sDate.Month,c.sDate.Year);
+  BSP_LCD_DisplayStringAtLine(2,c.vetor_print);
 }
 
 void renderiza_sensores(void)
 {
   c.umidade = le_umidade();
   c.temperatura = le_temperatura();
+	c.pressao = le_pressao();
 
   BSP_LCD_SetFont(&Font16);
   sprintf((char*)c.vetor_print,"%4.1f",c.umidade);
-  BSP_LCD_DisplayStringAtLine(5,c.vetor_print);
+  BSP_LCD_DisplayStringAtLine(6,c.vetor_print);
 
   BSP_LCD_SetFont(&Font16);
   sprintf((char*)c.vetor_print,"%4.1f",c.temperatura);
-  BSP_LCD_DisplayStringAtLine(6,c.vetor_print);
+  BSP_LCD_DisplayStringAtLine(7,c.vetor_print);
+	
+	BSP_LCD_SetFont(&Font16);
+  sprintf((char*)c.vetor_print,"%4.1f",c.pressao);
+  BSP_LCD_DisplayStringAtLine(8,c.vetor_print);
 }
 
 void configura_hora(void)
@@ -458,18 +512,44 @@ void pendrive(void)
 {
 	static int flag = 0;
 	HAL_GPIO_TogglePin(GPIOG,1<<14);
+	
 	while(flag == 0) // abre o arquivo para escrita na primeira vez e deixa aberto
 	{
 		MX_USB_HOST_Process();
 		if(Appli_state==APPLICATION_READY)
 		{		
 			if(f_open(&p.fp,p.filename,FA_CREATE_ALWAYS | FA_WRITE)!=FR_OK)
+			{
+				BSP_LCD_SetFont(&Font16);
+				sprintf((char*)c.vetor_print,"coisa ruim222222");
+				BSP_LCD_DisplayStringAtLine(9,c.vetor_print);
 				while(1);
+			}
 			else
 				flag=1;
 		}
 	}
 	
+	// configura buffer
+	HAL_RTC_GetTime(&hrtc, &c.sTime, FORMAT_BIN);
+  HAL_RTC_GetDate(&hrtc, &c.sDate, FORMAT_BIN);
+	sprintf((char*)p.buffer,"%2d,%2.0f,%2.0f,%3.0f,%d,%2d,%2d,%2d,%2d,%2d,%2d\n\r",c.indice,c.temperatura,c.umidade,c.pressao,c.corrente,c.sTime.Hours,
+																																		c.sTime.Minutes,c.sTime.Seconds,c.sDate.Date,c.sDate.Month,c.sDate.Year);
+	//
+	
+	if(f_write(&p.fp,p.buffer,strlen((char*)p.buffer),&p.ret)!=FR_OK) // vai escrevendo até pressionar o botao azul
+	{
+				BSP_LCD_SetFont(&Font16);
+				sprintf((char*)c.vetor_print,"coisa ruim33333");
+				BSP_LCD_DisplayStringAtLine(9,c.vetor_print);
+				while(1);
+	}
+	
+	if(HAL_GPIO_ReadPin(GPIOA,1)==1) // quando pressiona botao azul para de gravar e fecha o
+	{
+		f_close(&p.fp);
+		GPIOG->BSRR=1<<13;
+	}
 	
 }
 /* USER CODE END 4 */

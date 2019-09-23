@@ -53,3 +53,5 @@ displaylcd\usbh_conf.o: ../Middlewares/ST/STM32_USB_Host_Library/Core/Inc/usbh_i
 displaylcd\usbh_conf.o: ../Middlewares/ST/STM32_USB_Host_Library/Core/Inc/usbh_core.h
 displaylcd\usbh_conf.o: ../Middlewares/ST/STM32_USB_Host_Library/Core/Inc/usbh_pipes.h
 displaylcd\usbh_conf.o: ../Middlewares/ST/STM32_USB_Host_Library/Core/Inc/usbh_ctlreq.h
+displaylcd\usbh_conf.o: ../Inc/usbh_platform.h
+displaylcd\usbh_conf.o: ../Inc/usb_host.h
