@@ -66,9 +66,14 @@ struct Control{
   float temperatura, umidade, pressao;
   int corrente, potenciometro;
 	
+	int X; // fator
+	
 	int indice;
 
   uint8_t vetor_print[30];
+	
+	int8_t estado_atual;
+	int8_t estado_anterior;
 
 }c;
 
@@ -95,6 +100,7 @@ void renderiza_sensores(void);
 void configura_hora(void);
 void inicializa_display(void);
 void pendrive(void);
+void monta_pendrive(void);
 
 //endereco do sensor de pressao 0xBA e 0xBB
 // endereco do sensor ::: 0xBE (Write) 0xBF (Read)
@@ -134,6 +140,9 @@ int main(void)
 	c.sDate.Year = 70;
 	c.sDate.Month = 01;
 	c.sDate.Date = 01;
+	
+	c.estado_anterior = -1;
+	c.estado_atual = -1;
 	
 	strcpy(p.filename,"log.csv");
 
@@ -185,13 +194,7 @@ int main(void)
 	HAL_TIM_PWM_Start(&htim2,TIM_CHANNEL_2);
 	HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_1);
 	
-	if ( f_mount( &p.fatfs,"" ,0) != FR_OK )
-	{
-		BSP_LCD_SetFont(&Font16);
-		sprintf((char*)c.vetor_print,"coisa ruim111");
-		BSP_LCD_DisplayStringAtLine(9,c.vetor_print);
-		while(1);
-	}
+	//monta_pendrive();
 
   /* USER CODE END 2 */
 
@@ -204,14 +207,14 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 		
+	  aciona_PWM();
 		renderiza_RTC();
 		leitura_AD(200);
 		renderiza_sensores();
-    aciona_PWM();
 
-		HAL_Delay(800);
+		HAL_Delay(500);
 		MX_USB_HOST_Process();
-		pendrive();
+		//pendrive();
 		
   }
   /* USER CODE END 3 */
@@ -399,6 +402,16 @@ float le_pressao(void)
 	
 	return p;	
 }
+void monta_pendrive(void)
+{
+	if ( f_mount( &p.fatfs,"" ,0) != FR_OK )
+	{
+		BSP_LCD_SetFont(&Font16);
+		sprintf((char*)c.vetor_print,"coisa ruim111");
+		BSP_LCD_DisplayStringAtLine(9,c.vetor_print);
+		while(1);
+	}
+}
 void inicializa_vetor_uint8(uint8_t vetor[], int tam)
 {
   for(int i = 0; i < tam; i++)
@@ -413,7 +426,7 @@ void leitura_AD(int tempo)
   HAL_ADC_PollForConversion(&hadc1,tempo/2);
   c.potenciometro = HAL_ADC_GetValue(&hadc1); //LEITURA DO CANAL 5
   HAL_ADC_PollForConversion(&hadc1,tempo/2);
-  c.corrente = HAL_ADC_GetValue(&hadc1); //LEITURA DO CANAL 13 (na ordem RANK) //Pino PC3
+  c.X = HAL_ADC_GetValue(&hadc1); //LEITURA DO CANAL 13 (na ordem RANK) //Pino PC3
   HAL_ADC_Stop(&hadc1);
 }
 
@@ -421,24 +434,43 @@ void aciona_PWM(void)
 {
   if(c.potenciometro > 2000 & c.potenciometro < 2095)
   {
+		c.estado_atual = 0;
+		if(c.estado_atual != c.estado_anterior)
+		{
+			BSP_LCD_Clear(LCD_COLOR_WHITE);
+		}
+		
     BSP_LCD_SetFont(&Font16);
     BSP_LCD_DisplayStringAtLine(3,(uint8_t*)"motor disligado pora");
+
 		
 		TIM2->CCR2 = 0;
 		TIM3->CCR1 = 0;
   }
   else if(c.potenciometro >= 2095)
   {
+		c.estado_atual = 1;
+		if(c.estado_atual != c.estado_anterior)
+		{
+			BSP_LCD_Clear(LCD_COLOR_WHITE);
+		}
+			
     int pwm_percent = ((c.potenciometro-2095)*100)/2000;
     sprintf((char*)c.vetor_print,"Motor Direita : %04d",pwm_percent);
     BSP_LCD_SetFont(&Font16);
     BSP_LCD_DisplayStringAtLine(4,c.vetor_print);
-		
+
 		TIM2->CCR2 = pwm_percent;
 		TIM3->CCR1 = 0;
   }
   else if(c.potenciometro <= 2000)
   {
+		c.estado_atual = 2;
+		if(c.estado_atual != c.estado_anterior)
+		{
+			BSP_LCD_Clear(LCD_COLOR_WHITE);
+		}
+		
     int pwm_percent = ((2000-c.potenciometro)*100)/2000;
     sprintf((char*)c.vetor_print,"Motor Esquerda : %04d", pwm_percent);
     BSP_LCD_SetFont(&Font16);
@@ -447,6 +479,8 @@ void aciona_PWM(void)
 		TIM2->CCR2 = 0;
 		TIM3->CCR1 = pwm_percent;
   }
+	
+	c.estado_anterior = c.estado_atual;
 }
 
 void renderiza_RTC(void)
@@ -479,6 +513,22 @@ void renderiza_sensores(void)
 	BSP_LCD_SetFont(&Font16);
   sprintf((char*)c.vetor_print,"%4.1f",c.pressao);
   BSP_LCD_DisplayStringAtLine(8,c.vetor_print);
+	
+	/*int calibrando = 1;
+	
+	int fator = 27;
+	
+	if(calibrando)
+	{
+		c.corrente = c.X;
+	}
+	else
+	{
+		c.corrente = (4095 - c.X) / fator;
+	}*/
+	
+	
+	
 }
 
 void configura_hora(void)
@@ -526,15 +576,20 @@ void pendrive(void)
 				while(1);
 			}
 			else
+			{
 				flag=1;
+				sprintf((char*)p.buffer,"i,temp,umid,press,amps,hora,min,seg,dia,mes,ano\n");
+				f_write(&p.fp,p.buffer,strlen((char*)p.buffer),&p.ret);
+			}
 		}
 	}
 	
 	// configura buffer
 	HAL_RTC_GetTime(&hrtc, &c.sTime, FORMAT_BIN);
   HAL_RTC_GetDate(&hrtc, &c.sDate, FORMAT_BIN);
-	sprintf((char*)p.buffer,"%2d,%2.0f,%2.0f,%3.0f,%d,%2d,%2d,%2d,%2d,%2d,%2d\n\r",c.indice,c.temperatura,c.umidade,c.pressao,c.corrente,c.sTime.Hours,
+	sprintf((char*)p.buffer,"%2d,%2.0f,%2.0f,%3.0f,%d,%2d,%2d,%2d,%2d,%2d,%2d\n",c.indice,c.temperatura,c.umidade,c.pressao,c.corrente,c.sTime.Hours,
 																																		c.sTime.Minutes,c.sTime.Seconds,c.sDate.Date,c.sDate.Month,c.sDate.Year);
+	c.indice++;
 	//
 	
 	if(f_write(&p.fp,p.buffer,strlen((char*)p.buffer),&p.ret)!=FR_OK) // vai escrevendo até pressionar o botao azul
