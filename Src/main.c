@@ -63,10 +63,8 @@ struct Control{
 
   uint8_t dadoRX[30];
 
-  float temperatura, umidade, pressao;
-  int corrente, potenciometro;
-	
-	int X; // fator
+  float temperatura, umidade, pressao, corrente;
+  int potenciometro, X;
 	
 	int indice;
 
@@ -92,6 +90,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart);
 float le_umidade(void);
 float le_temperatura(void);
 float le_pressao(void);
+float le_corrente(void);
 void inicializa_vetor_uint8(uint8_t vetor[], int tam);
 void leitura_AD(int tempo);
 void aciona_PWM(void);
@@ -101,17 +100,6 @@ void configura_hora(void);
 void inicializa_display(void);
 void pendrive(void);
 void monta_pendrive(void);
-
-//endereco do sensor de pressao 0xBA e 0xBB
-// endereco do sensor ::: 0xBE (Write) 0xBF (Read)
-
-//
-//	9 SDA - PC9
-//	10 SCL - PA8 de baixo
-//	2 -> 3V
-//	6 -> GND
-//
-//
 
 /* USER CODE END 0 */
 
@@ -212,7 +200,7 @@ int main(void)
 		leitura_AD(200);
 		renderiza_sensores();
 
-		HAL_Delay(500);
+		HAL_Delay(700);
 		MX_USB_HOST_Process();
 		//pendrive();
 		
@@ -402,12 +390,21 @@ float le_pressao(void)
 	
 	return p;	
 }
+float le_corrente(void)
+{
+	float corrente = 0;
+	
+	float V = (float)c.X * 0.00122;
+	float vzinho = V - 2.5;
+	
+	return corrente;
+}
 void monta_pendrive(void)
 {
 	if ( f_mount( &p.fatfs,"" ,0) != FR_OK )
 	{
 		BSP_LCD_SetFont(&Font16);
-		sprintf((char*)c.vetor_print,"coisa ruim111");
+		sprintf((char*)c.vetor_print,"erro ao montar pendrive");
 		BSP_LCD_DisplayStringAtLine(9,c.vetor_print);
 		while(1);
 	}
@@ -441,7 +438,7 @@ void aciona_PWM(void)
 		}
 		
     BSP_LCD_SetFont(&Font16);
-    BSP_LCD_DisplayStringAtLine(3,(uint8_t*)"motor disligado pora");
+    BSP_LCD_DisplayStringAtLine(3,(uint8_t*)"Motor Parado!");
 
 		
 		TIM2->CCR2 = 0;
@@ -456,9 +453,9 @@ void aciona_PWM(void)
 		}
 			
     int pwm_percent = ((c.potenciometro-2095)*100)/2000;
-    sprintf((char*)c.vetor_print,"Motor Direita : %04d",pwm_percent);
+    sprintf((char*)c.vetor_print,"Motor para direita : %02d%%",pwm_percent);
     BSP_LCD_SetFont(&Font16);
-    BSP_LCD_DisplayStringAtLine(4,c.vetor_print);
+    BSP_LCD_DisplayStringAtLine(3,c.vetor_print);
 
 		TIM2->CCR2 = pwm_percent;
 		TIM3->CCR1 = 0;
@@ -472,7 +469,7 @@ void aciona_PWM(void)
 		}
 		
     int pwm_percent = ((2000-c.potenciometro)*100)/2000;
-    sprintf((char*)c.vetor_print,"Motor Esquerda : %04d", pwm_percent);
+    sprintf((char*)c.vetor_print,"Motor para esquerda : %02d%%", pwm_percent);
     BSP_LCD_SetFont(&Font16);
     BSP_LCD_DisplayStringAtLine(5,c.vetor_print);
 		
@@ -492,7 +489,7 @@ void renderiza_RTC(void)
   sprintf((char*)c.vetor_print,"%02d:%02d:%02d",c.sTime.Hours,c.sTime.Minutes,c.sTime.Seconds);
   BSP_LCD_DisplayStringAtLine(1,c.vetor_print);
 	
-	sprintf((char*)c.vetor_print,"%02d:%02d:%02d",c.sDate.Date,c.sDate.Month,c.sDate.Year);
+	sprintf((char*)c.vetor_print,"%02d/%02d/%02d",c.sDate.Date,c.sDate.Month,c.sDate.Year);
   BSP_LCD_DisplayStringAtLine(2,c.vetor_print);
 }
 
@@ -501,31 +498,23 @@ void renderiza_sensores(void)
   c.umidade = le_umidade();
   c.temperatura = le_temperatura();
 	c.pressao = le_pressao();
+	c.corrente = le_corrente();
 
   BSP_LCD_SetFont(&Font16);
-  sprintf((char*)c.vetor_print,"%4.1f",c.umidade);
+  sprintf((char*)c.vetor_print,"Umidade: %2.0f [%%]",c.umidade);
   BSP_LCD_DisplayStringAtLine(6,c.vetor_print);
 
   BSP_LCD_SetFont(&Font16);
-  sprintf((char*)c.vetor_print,"%4.1f",c.temperatura);
+  sprintf((char*)c.vetor_print,"Temp: %2.0f [C]",c.temperatura);
   BSP_LCD_DisplayStringAtLine(7,c.vetor_print);
 	
 	BSP_LCD_SetFont(&Font16);
-  sprintf((char*)c.vetor_print,"%4.1f",c.pressao);
+  sprintf((char*)c.vetor_print,"Pressao: %4.0f [hPA]",c.pressao);
   BSP_LCD_DisplayStringAtLine(8,c.vetor_print);
 	
-	/*int calibrando = 1;
-	
-	int fator = 27;
-	
-	if(calibrando)
-	{
-		c.corrente = c.X;
-	}
-	else
-	{
-		c.corrente = (4095 - c.X) / fator;
-	}*/
+	BSP_LCD_SetFont(&Font16);
+  sprintf((char*)c.vetor_print,"Corrente: %4.0f [mA]",c.corrente);
+  BSP_LCD_DisplayStringAtLine(8,c.vetor_print);
 	
 	
 	
@@ -571,7 +560,7 @@ void pendrive(void)
 			if(f_open(&p.fp,p.filename,FA_CREATE_ALWAYS | FA_WRITE)!=FR_OK)
 			{
 				BSP_LCD_SetFont(&Font16);
-				sprintf((char*)c.vetor_print,"coisa ruim222222");
+				sprintf((char*)c.vetor_print,"erro ao abrir arquivo");
 				BSP_LCD_DisplayStringAtLine(9,c.vetor_print);
 				while(1);
 			}
@@ -595,7 +584,7 @@ void pendrive(void)
 	if(f_write(&p.fp,p.buffer,strlen((char*)p.buffer),&p.ret)!=FR_OK) // vai escrevendo até pressionar o botao azul
 	{
 				BSP_LCD_SetFont(&Font16);
-				sprintf((char*)c.vetor_print,"coisa ruim33333");
+				sprintf((char*)c.vetor_print,"erro ao escrever no arquivo");
 				BSP_LCD_DisplayStringAtLine(9,c.vetor_print);
 				while(1);
 	}
