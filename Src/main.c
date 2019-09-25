@@ -179,7 +179,7 @@ int main(void)
 	HAL_UART_Receive_IT(&huart1,c.dadoRX,17);
 	
 	// inicializando PWM
-	HAL_TIM_PWM_Start(&htim2,TIM_CHANNEL_2);
+	HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_3);
 	HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_1);
 	
 	//monta_pendrive();
@@ -394,8 +394,9 @@ float le_corrente(void)
 {
 	float corrente = 0;
 	
-	float V = (float)c.X * 0.00122;
-	float vzinho = V - 2.5;
+	double V = (double)c.X * 0.00073378;
+	double vzinho = V - 1.5;
+	corrente = (vzinho / 0.185) * 100;
 	
 	return corrente;
 }
@@ -441,7 +442,7 @@ void aciona_PWM(void)
     BSP_LCD_DisplayStringAtLine(3,(uint8_t*)"Motor Parado!");
 
 		
-		TIM2->CCR2 = 0;
+		TIM3->CCR3 = 0;
 		TIM3->CCR1 = 0;
   }
   else if(c.potenciometro >= 2095)
@@ -453,11 +454,11 @@ void aciona_PWM(void)
 		}
 			
     int pwm_percent = ((c.potenciometro-2095)*100)/2000;
-    sprintf((char*)c.vetor_print,"Motor para direita : %02d%%",pwm_percent);
+    sprintf((char*)c.vetor_print,"Motor direita: %03d%%",pwm_percent);
     BSP_LCD_SetFont(&Font16);
     BSP_LCD_DisplayStringAtLine(3,c.vetor_print);
 
-		TIM2->CCR2 = pwm_percent;
+		TIM3->CCR3 = pwm_percent;
 		TIM3->CCR1 = 0;
   }
   else if(c.potenciometro <= 2000)
@@ -469,11 +470,11 @@ void aciona_PWM(void)
 		}
 		
     int pwm_percent = ((2000-c.potenciometro)*100)/2000;
-    sprintf((char*)c.vetor_print,"Motor para esquerda : %02d%%", pwm_percent);
+    sprintf((char*)c.vetor_print,"Motor esquerda: %03d%%", pwm_percent);
     BSP_LCD_SetFont(&Font16);
-    BSP_LCD_DisplayStringAtLine(5,c.vetor_print);
+    BSP_LCD_DisplayStringAtLine(3,c.vetor_print);
 		
-		TIM2->CCR2 = 0;
+		TIM3->CCR3 = 0;
 		TIM3->CCR1 = pwm_percent;
   }
 	
@@ -515,8 +516,6 @@ void renderiza_sensores(void)
 	BSP_LCD_SetFont(&Font16);
   sprintf((char*)c.vetor_print,"Corrente: %4.0f [mA]",c.corrente);
   BSP_LCD_DisplayStringAtLine(8,c.vetor_print);
-	
-	
 	
 }
 
@@ -576,7 +575,7 @@ void pendrive(void)
 	// configura buffer
 	HAL_RTC_GetTime(&hrtc, &c.sTime, FORMAT_BIN);
   HAL_RTC_GetDate(&hrtc, &c.sDate, FORMAT_BIN);
-	sprintf((char*)p.buffer,"%2d,%2.0f,%2.0f,%3.0f,%d,%2d,%2d,%2d,%2d,%2d,%2d\n",c.indice,c.temperatura,c.umidade,c.pressao,c.corrente,c.sTime.Hours,
+	sprintf((char*)p.buffer,"%2d,%2.0f,%2.0f,%3.0f,%4.0f,%2d,%2d,%2d,%2d,%2d,%2d\n",c.indice,c.temperatura,c.umidade,c.pressao,c.corrente,c.sTime.Hours,
 																																		c.sTime.Minutes,c.sTime.Seconds,c.sDate.Date,c.sDate.Month,c.sDate.Year);
 	c.indice++;
 	//
