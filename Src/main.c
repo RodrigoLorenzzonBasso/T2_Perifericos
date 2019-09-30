@@ -182,7 +182,7 @@ int main(void)
 	HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_3);
 	HAL_TIM_PWM_Start(&htim3,TIM_CHANNEL_1);
 	
-	//monta_pendrive();
+	monta_pendrive();
 
   /* USER CODE END 2 */
 
@@ -200,9 +200,9 @@ int main(void)
 		leitura_AD(200);
 		renderiza_sensores();
 
-		HAL_Delay(700);
+		HAL_Delay(800);
 		MX_USB_HOST_Process();
-		//pendrive();
+		pendrive();
 		
   }
   /* USER CODE END 3 */
@@ -515,7 +515,7 @@ void renderiza_sensores(void)
 	
 	BSP_LCD_SetFont(&Font16);
   sprintf((char*)c.vetor_print,"Corrente: %4.0f [mA]",c.corrente);
-  BSP_LCD_DisplayStringAtLine(8,c.vetor_print);
+  BSP_LCD_DisplayStringAtLine(9,c.vetor_print);
 	
 }
 
@@ -525,9 +525,10 @@ void configura_hora(void)
 	c.sTime.Minutes = (c.dadoRX[3] - 0x30)*10 + (c.dadoRX[4] - 0x30);
 	c.sTime.Seconds = (c.dadoRX[6] - 0x30)*10 + (c.dadoRX[7] - 0x30);
 	
-	c.sDate.Year = (c.dadoRX[9] - 0x30)*10 + (c.dadoRX[10] - 0x30);
+	c.sDate.Date = (c.dadoRX[9] - 0x30)*10 + (c.dadoRX[10] - 0x30);
 	c.sDate.Month = (c.dadoRX[12] - 0x30)*10 + (c.dadoRX[13] - 0x30);
-	c.sDate.Date = (c.dadoRX[15] - 0x30)*10 + (c.dadoRX[16] - 0x30);
+	c.sDate.Year = (c.dadoRX[15] - 0x30)*10 + (c.dadoRX[16] - 0x30);
+	
 	
 	HAL_RTC_SetDate(&hrtc, &c.sDate, FORMAT_BIN);
   HAL_RTC_SetTime(&hrtc, &c.sTime, FORMAT_BIN);
@@ -566,8 +567,8 @@ void pendrive(void)
 			else
 			{
 				flag=1;
-				sprintf((char*)p.buffer,"i,temp,umid,press,amps,hora,min,seg,dia,mes,ano\n");
-				f_write(&p.fp,p.buffer,strlen((char*)p.buffer),&p.ret);
+				//sprintf((char*)p.buffer,"i,temp,umid,press,amps,hora,min,seg,dia,mes,ano\n");
+				//f_write(&p.fp,p.buffer,strlen((char*)p.buffer),&p.ret);
 			}
 		}
 	}
